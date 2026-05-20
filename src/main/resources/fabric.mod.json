@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "proximichat",
+  "version": "${version}",
+  "name": "ProximiChat",
+  "description": "Proximity voice chat mod for Minecraft — push-to-talk, proximity audio, private groups.",
+  "authors": ["You"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/proximichat/textures/gui/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.proximichat.ProximiChat"],
+    "client": ["com.proximichat.client.ProximiChatClient"],
+    "server": ["com.proximichat.server.ProximiChatServer"]
+  },
+  "mixins": [
+    "proximichat.mixins.json",
+    { "config": "proximichat.client.mixins.json", "environment": "client" }
+  ],
+  "depends": {
+    "fabricloader": ">=0.14.0",
+    "fabric-api": "*",
+    "minecraft": ">=1.20 <=1.21.99",
+    "java": ">=21"
+  }
+}
