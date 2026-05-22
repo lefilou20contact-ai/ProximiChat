@@ -1,0 +1,66 @@
+<svg width="680" height="680" viewBox="0 0 680 680" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>ProximiChat logo</title>
+  <desc>Logo circulaire du mod ProximiChat avec une icône microphone et des ondes de proximité style Minecraft</desc>
+
+  <defs>
+    <clipPath id="circle-clip">
+      <circle cx="340" cy="300" r="240"/>
+    </clipPath>
+  </defs>
+
+  <circle cx="340" cy="300" r="240" fill="#1a1f2e"/>
+
+  <g clip-path="url(#circle-clip)" opacity="0.07">
+    <line x1="100" y1="60" x2="100" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="140" y1="60" x2="140" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="180" y1="60" x2="180" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="220" y1="60" x2="220" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="260" y1="60" x2="260" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="300" y1="60" x2="300" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="340" y1="60" x2="340" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="380" y1="60" x2="380" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="420" y1="60" x2="420" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="460" y1="60" x2="460" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="500" y1="60" x2="500" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="540" y1="60" x2="540" y2="540" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="100" y1="100" x2="580" y2="100" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="100" y1="140" x2="580" y2="140" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="100" y1="180" x2="580" y2="180" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="100" y1="220" x2="580" y2="220" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="100" y1="260" x2="580" y2="260" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="100" y1="300" x2="580" y2="300" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="100" y1="340" x2="580" y2="340" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="100" y1="380" x2="580" y2="380" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="100" y1="420" x2="580" y2="420" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="100" y1="460" x2="580" y2="460" stroke="#7ec8e3" stroke-width="1"/>
+    <line x1="100" y1="500" x2="580" y2="500" stroke="#7ec8e3" stroke-width="1"/>
+  </g>
+
+  <circle cx="340" cy="300" r="190" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-opacity="0.15" stroke-dasharray="8 6"/>
+  <circle cx="340" cy="300" r="145" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-opacity="0.25" stroke-dasharray="8 6"/>
+  <circle cx="340" cy="300" r="100" fill="none" stroke="#4ade80" stroke-width="3" stroke-opacity="0.4"/>
+
+  <rect x="310" y="170" width="60" height="90" rx="30" fill="#4ade80"/>
+  <rect x="314" y="192" width="52" height="4" rx="2" fill="#1a1f2e" opacity="0.3"/>
+  <rect x="314" y="203" width="52" height="4" rx="2" fill="#1a1f2e" opacity="0.3"/>
+  <rect x="314" y="214" width="52" height="4" rx="2" fill="#1a1f2e" opacity="0.3"/>
+  <rect x="314" y="225" width="52" height="4" rx="2" fill="#1a1f2e" opacity="0.3"/>
+
+  <rect x="333" y="260" width="14" height="50" rx="7" fill="#a3e635"/>
+  <rect x="300" y="308" width="80" height="14" rx="7" fill="#a3e635"/>
+
+  <path d="M292 220 Q270 240 270 268 Q270 296 292 316" fill="none" stroke="#4ade80" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+  <path d="M268 206 Q234 236 234 268 Q234 300 268 330" fill="none" stroke="#4ade80" stroke-width="4" stroke-linecap="round" opacity="0.55"/>
+  <path d="M244 192 Q198 230 198 268 Q198 306 244 344" fill="none" stroke="#4ade80" stroke-width="3" stroke-linecap="round" opacity="0.3"/>
+
+  <path d="M388 220 Q410 240 410 268 Q410 296 388 316" fill="none" stroke="#4ade80" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+  <path d="M412 206 Q446 236 446 268 Q446 300 412 330" fill="none" stroke="#4ade80" stroke-width="4" stroke-linecap="round" opacity="0.55"/>
+  <path d="M436 192 Q482 230 482 268 Q482 306 436 344" fill="none" stroke="#4ade80" stroke-width="3" stroke-linecap="round" opacity="0.3"/>
+
+  <circle cx="340" cy="300" r="240" fill="none" stroke="#4ade80" stroke-width="5"/>
+
+  <text x="340" y="406" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="42" font-weight="700" fill="#ffffff" letter-spacing="2">PROXIMI</text>
+  <text x="340" y="450" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="42" font-weight="700" fill="#4ade80" letter-spacing="6">CHAT</text>
+  <text x="340" y="490" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#a3a3a3" letter-spacing="3">PROXIMITY VOICE · FABRIC</text>
+
+</svg>
