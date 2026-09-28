@@ -1,10 +1,10 @@
 package com.proximichat.network;
 
 import com.proximichat.ProximiChat;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
 import java.util.UUID;
 
@@ -16,29 +16,28 @@ public record VoiceDataPayload(
         UUID senderUuid,
         byte[] opusData,
         boolean whisper
-) implements CustomPayload {
+) implements CustomPacketPayload {
 
-    public static final CustomPayload.Id<VoiceDataPayload> ID =
-            new CustomPayload.Id<>(Identifier.of(ProximiChat.MOD_ID, "voice_data"));
+    private static final int MAX_FRAME_BYTES = 4096; // ~4 KB per frame, generous headroom
 
-    public static final PacketCodec<PacketByteBuf, VoiceDataPayload> CODEC =
-            PacketCodec.of(VoiceDataPayload::write, VoiceDataPayload::read);
+    public static final CustomPacketPayload.Type<VoiceDataPayload> TYPE =
+            new CustomPacketPayload.Type<>(Identifier.of(ProximiChat.MOD_ID, "voice_data"));
 
-    private static VoiceDataPayload read(PacketByteBuf buf) {
-        UUID uuid     = buf.readUuid();
-        byte[] data   = buf.readByteArray(4096); // max ~4 KB per frame
-        boolean wh    = buf.readBoolean();
-        return new VoiceDataPayload(uuid, data, wh);
-    }
-
-    private void write(PacketByteBuf buf) {
-        buf.writeUuid(senderUuid);
-        buf.writeByteArray(opusData);
-        buf.writeBoolean(whisper);
-    }
+    public static final StreamCodec<RegistryFriendlyByteBuf, VoiceDataPayload> CODEC = StreamCodec.of(
+            (buf, payload) -> {
+                buf.writeUUID(payload.senderUuid());
+                buf.writeByteArray(payload.opusData());
+                buf.writeBoolean(payload.whisper());
+            },
+            buf -> new VoiceDataPayload(
+                    buf.readUUID(),
+                    buf.readByteArray(MAX_FRAME_BYTES),
+                    buf.readBoolean()
+            )
+    );
 
     @Override
-    public CustomPayload.Id<? extends CustomPayload> getId() {
-        return ID;
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 }

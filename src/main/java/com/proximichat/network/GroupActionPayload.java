@@ -1,29 +1,33 @@
 package com.proximichat.network;
 
 import com.proximichat.ProximiChat;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
-public record GroupActionPayload(Action action, String groupId) implements CustomPayload {
+public record GroupActionPayload(Action action, String groupId) implements CustomPacketPayload {
 
     public enum Action { CREATE, JOIN, LEAVE }
 
-    public static final CustomPayload.Id<GroupActionPayload> ID =
-            new CustomPayload.Id<>(Identifier.of(ProximiChat.MOD_ID, "group_action"));
+    private static final int MAX_GROUP_ID_LENGTH = 64;
 
-    public static final PacketCodec<PacketByteBuf, GroupActionPayload> CODEC =
-            PacketCodec.of(
-                    (p, buf) -> {
-                        buf.writeEnumConstant(p.action());
-                        buf.writeString(p.groupId(), 64);
-                    },
-                    buf -> new GroupActionPayload(
-                            buf.readEnumConstant(Action.class),
-                            buf.readString(64)
-                    )
-            );
+    public static final CustomPacketPayload.Type<GroupActionPayload> TYPE =
+            new CustomPacketPayload.Type<>(Identifier.of(ProximiChat.MOD_ID, "group_action"));
 
-    @Override public CustomPayload.Id<? extends CustomPayload> getId() { return ID; }
+    public static final StreamCodec<RegistryFriendlyByteBuf, GroupActionPayload> CODEC = StreamCodec.of(
+            (buf, payload) -> {
+                buf.writeVarInt(payload.action().ordinal());
+                buf.writeUtf(payload.groupId(), MAX_GROUP_ID_LENGTH);
+            },
+            buf -> new GroupActionPayload(
+                    Action.values()[buf.readVarInt()],
+                    buf.readUtf(MAX_GROUP_ID_LENGTH)
+            )
+    );
+
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
 }

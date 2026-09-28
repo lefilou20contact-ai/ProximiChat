@@ -4,7 +4,7 @@ import com.proximichat.network.GroupActionPayload;
 import com.proximichat.network.GroupListPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,8 +26,8 @@ public class VoiceGroupManager {
 
     public static void onGroupAction(GroupActionPayload payload,
                                      ServerPlayNetworking.Context ctx) {
-        ServerPlayerEntity player = ctx.player();
-        UUID uuid = player.getUuid();
+        ServerPlayer player = ctx.player();
+        UUID uuid = player.getUUID();
         String groupId = payload.groupId().trim();
 
         switch (payload.action()) {
@@ -86,8 +86,8 @@ public class VoiceGroupManager {
 
     private static void syncGroupList(MinecraftServer server) {
         GroupListPayload payload = new GroupListPayload(getAllGroupIds());
-        server.getPlayerManager().getPlayerList().forEach(p -> {
-            if (VoiceServerHandler.isConnected(p.getUuid())) {
+        server.getPlayerList().getPlayers().forEach(p -> {
+            if (VoiceServerHandler.isConnected(p.getUUID())) {
                 ServerPlayNetworking.send(p, payload);
             }
         });

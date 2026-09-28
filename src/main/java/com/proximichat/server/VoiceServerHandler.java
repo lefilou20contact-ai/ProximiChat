@@ -6,8 +6,8 @@ import com.proximichat.network.MutePlayerPayload;
 import com.proximichat.network.VoiceDataPayload;
 import com.proximichat.network.VoiceStatePayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,14 +31,14 @@ public class VoiceServerHandler {
 
     public static void onClientConnected(ClientConnectedPayload payload,
                                          ServerPlayNetworking.Context ctx) {
-        UUID uuid = ctx.player().getUuid();
+        UUID uuid = ctx.player().getUUID();
         connectedClients.add(uuid);
     }
 
     public static void onVoiceData(VoiceDataPayload payload,
                                    ServerPlayNetworking.Context ctx) {
-        ServerPlayerEntity sender = ctx.player();
-        UUID senderUuid = sender.getUuid();
+        ServerPlayer sender = ctx.player();
+        UUID senderUuid = sender.getUUID();
 
         if (!connectedClients.contains(senderUuid)) return;
 
@@ -46,23 +46,23 @@ public class VoiceServerHandler {
                 ? ProximiChatConfig.get().whisperDistance
                 : ProximiChatConfig.get().proximityDistance;
 
-        Vec3d senderPos = sender.getPos();
+        Vec3 senderPos = sender.position();
 
         // Broadcast to nearby players on the same dimension
         VoiceDataPayload outPayload = new VoiceDataPayload(senderUuid, payload.opusData(), payload.whisper());
 
-        sender.getServerWorld().getPlayers().forEach(target -> {
-            if (target.getUuid().equals(senderUuid)) return; // don't echo to self
-            if (!connectedClients.contains(target.getUuid())) return;
-            if (isMuted(senderUuid, target.getUuid())) return;
+        sender.level().players().forEach(target -> {
+            if (target.getUUID().equals(senderUuid)) return; // don't echo to self
+            if (!connectedClients.contains(target.getUUID())) return;
+            if (isMuted(senderUuid, target.getUUID())) return;
 
             // Check if target is in the same private group — if so, skip proximity check
             Optional<String> senderGroup = VoiceGroupManager.getGroupOf(senderUuid);
-            Optional<String> targetGroup = VoiceGroupManager.getGroupOf(target.getUuid());
+            Optional<String> targetGroup = VoiceGroupManager.getGroupOf(target.getUUID());
             boolean inSameGroup = senderGroup.isPresent() && senderGroup.equals(targetGroup);
 
             if (!inSameGroup) {
-                double dist = target.getPos().distanceTo(senderPos);
+                double dist = target.position().distanceTo(senderPos);
                 if (dist > maxDist) return;
             }
 
@@ -75,7 +75,7 @@ public class VoiceServerHandler {
 
     public static void onMutePlayer(MutePlayerPayload payload,
                                     ServerPlayNetworking.Context ctx) {
-        UUID muter = ctx.player().getUuid();
+        UUID muter = ctx.player().getUUID();
         Set<UUID> muted = muteLists.computeIfAbsent(muter,
                 k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
         if (payload.muted()) {
@@ -92,10 +92,10 @@ public class VoiceServerHandler {
         return muted != null && muted.contains(speaker);
     }
 
-    private static void broadcastVoiceState(ServerPlayerEntity speaker, boolean speaking) {
-        VoiceStatePayload state = new VoiceStatePayload(speaker.getUuid(), speaking);
-        speaker.getServerWorld().getPlayers().forEach(p -> {
-            if (connectedClients.contains(p.getUuid())) {
+    private static void broadcastVoiceState(ServerPlayer speaker, boolean speaking) {
+        VoiceStatePayload state = new VoiceStatePayload(speaker.getUUID(), speaking);
+        speaker.level().players().forEach(p -> {
+            if (connectedClients.contains(p.getUUID())) {
                 ServerPlayNetworking.send(p, state);
             }
         });

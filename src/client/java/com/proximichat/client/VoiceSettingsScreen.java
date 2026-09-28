@@ -1,12 +1,11 @@
 package com.proximichat.client;
 
 import com.proximichat.config.ProximiChatConfig;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.SliderWidget;
-import net.minecraft.screen.ScreenTexts;
-import net.minecraft.text.Text;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 /**
  * In-game settings screen for ProximiChat.
@@ -17,9 +16,11 @@ public class VoiceSettingsScreen extends Screen {
     private final Screen parent;
 
     public VoiceSettingsScreen(Screen parent) {
-        super(Text.translatable("screen.proximichat.settings"));
+        super(Component.translatable("screen.proximichat.settings"));
         this.parent = parent;
     }
+
+    private static String onOff(boolean b) { return b ? "ON" : "OFF"; }
 
     @Override
     protected void init() {
@@ -28,21 +29,21 @@ public class VoiceSettingsScreen extends Screen {
         int startY = this.height / 4;
 
         // Push-to-Talk toggle
-        addDrawableChild(ButtonWidget.builder(
-                Text.literal("Mode: " + (cfg.pushToTalk ? "Push-to-Talk" : "Voice Activation")),
+        addRenderableWidget(Button.builder(
+                Component.literal("Mode: " + (cfg.pushToTalk ? "Push-to-Talk" : "Voice Activation")),
                 btn -> {
                     cfg.pushToTalk = !cfg.pushToTalk;
-                    btn.setMessage(Text.literal("Mode: " + (cfg.pushToTalk ? "Push-to-Talk" : "Voice Activation")));
+                    btn.setMessage(Component.literal("Mode: " + (cfg.pushToTalk ? "Push-to-Talk" : "Voice Activation")));
                     ProximiChatConfig.save();
                 }
-        ).dimensions(centerX - 100, startY, 200, 20).build());
+        ).bounds(centerX - 100, startY, 200, 20).build());
 
         // Input gain slider
-        addDrawableChild(new SliderWidget(centerX - 100, startY + 30, 200, 20,
-                Text.literal("Mic Volume: " + (int)(cfg.inputGain * 100) + "%"),
+        addRenderableWidget(new AbstractSliderButton(centerX - 100, startY + 30, 200, 20,
+                Component.literal("Mic Volume: " + (int) (cfg.inputGain * 100) + "%"),
                 cfg.inputGain) {
             @Override protected void updateMessage() {
-                setMessage(Text.literal("Mic Volume: " + (int)(this.value * 100) + "%"));
+                setMessage(Component.literal("Mic Volume: " + (int) (this.value * 100) + "%"));
             }
             @Override protected void applyValue() {
                 cfg.inputGain = (float) this.value;
@@ -51,11 +52,11 @@ public class VoiceSettingsScreen extends Screen {
         });
 
         // Output gain slider
-        addDrawableChild(new SliderWidget(centerX - 100, startY + 60, 200, 20,
-                Text.literal("Speaker Volume: " + (int)(cfg.outputGain * 100) + "%"),
+        addRenderableWidget(new AbstractSliderButton(centerX - 100, startY + 60, 200, 20,
+                Component.literal("Speaker Volume: " + (int) (cfg.outputGain * 100) + "%"),
                 cfg.outputGain) {
             @Override protected void updateMessage() {
-                setMessage(Text.literal("Speaker Volume: " + (int)(this.value * 100) + "%"));
+                setMessage(Component.literal("Speaker Volume: " + (int) (this.value * 100) + "%"));
             }
             @Override protected void applyValue() {
                 cfg.outputGain = (float) this.value;
@@ -64,42 +65,43 @@ public class VoiceSettingsScreen extends Screen {
         });
 
         // Noise suppression toggle
-        addDrawableChild(ButtonWidget.builder(
-                Text.literal("Noise Suppression: " + (cfg.enableNoiseSuppression ? "ON" : "OFF")),
+        addRenderableWidget(Button.builder(
+                Component.literal("Noise Suppression: " + onOff(cfg.enableNoiseSuppression)),
                 btn -> {
                     cfg.enableNoiseSuppression = !cfg.enableNoiseSuppression;
-                    btn.setMessage(Text.literal("Noise Suppression: " + (cfg.enableNoiseSuppression ? "ON" : "OFF")));
+                    btn.setMessage(Component.literal("Noise Suppression: " + onOff(cfg.enableNoiseSuppression)));
                     ProximiChatConfig.save();
                 }
-        ).dimensions(centerX - 100, startY + 90, 200, 20).build());
+        ).bounds(centerX - 100, startY + 90, 200, 20).build());
 
         // Show player icons toggle
-        addDrawableChild(ButtonWidget.builder(
-                Text.literal("Player Icons: " + (cfg.showPlayerIcons ? "ON" : "OFF")),
+        addRenderableWidget(Button.builder(
+                Component.literal("Player Icons: " + onOff(cfg.showPlayerIcons)),
                 btn -> {
                     cfg.showPlayerIcons = !cfg.showPlayerIcons;
-                    btn.setMessage(Text.literal("Player Icons: " + (cfg.showPlayerIcons ? "ON" : "OFF")));
+                    btn.setMessage(Component.literal("Player Icons: " + onOff(cfg.showPlayerIcons)));
                     ProximiChatConfig.save();
                 }
-        ).dimensions(centerX - 100, startY + 120, 200, 20).build());
+        ).bounds(centerX - 100, startY + 120, 200, 20).build());
 
         // Open group screen
-        addDrawableChild(ButtonWidget.builder(
-                Text.literal("Voice Groups..."),
-                btn -> this.client.setScreen(new VoiceGroupScreen(this))
-        ).dimensions(centerX - 100, startY + 155, 200, 20).build());
+        addRenderableWidget(Button.builder(
+                Component.literal("Voice Groups..."),
+                btn -> this.minecraft.gui.setScreen(new VoiceGroupScreen(this))
+        ).bounds(centerX - 100, startY + 155, 200, 20).build());
 
         // Done
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE,
-                btn -> this.client.setScreen(parent)
-        ).dimensions(centerX - 75, startY + 190, 150, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("gui.done"),
+                btn -> this.minecraft.gui.setScreen(parent)
+        ).bounds(centerX - 75, startY + 190, 150, 20).build());
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        super.renderBackground(context, mouseX, mouseY, delta);
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title,
-                this.width / 2, this.height / 4 - 20, 0xFFFFFF);
-        super.render(context, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
+        String title = this.title.getString();
+        graphics.text(this.font, title,
+                this.width / 2 - this.font.width(title) / 2,
+                this.height / 4 - 20, 0xFFFFFFFF, true);
     }
 }

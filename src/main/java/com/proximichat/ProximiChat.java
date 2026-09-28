@@ -16,13 +16,10 @@ public class ProximiChat implements ModInitializer {
     public void onInitialize() {
         LOGGER.info("[ProximiChat] Initializing...");
 
-        // Load config
         ProximiChatConfig.load();
 
-        // Register network packets
         PacketRegistry.registerServerbound();
 
-        // Server lifecycle hooks
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             LOGGER.info("[ProximiChat] Server started — voice chat ready.");
         });

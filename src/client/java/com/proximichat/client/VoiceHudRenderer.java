@@ -3,26 +3,27 @@ package com.proximichat.client;
 import com.proximichat.config.ProximiChatConfig;
 import com.proximichat.network.VoiceStatePayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.entity.EntityRenderer;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.Identifier;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.GuiGraphicsExtractor;
+import net.minecraft.client.Minecraft;
 
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Draws a small microphone icon above players who are currently speaking,
- * and a muted icon on the local player when they are muted.
+ * Draws a small indicator above/below the hotbar when the local player is
+ * muted or speaking.
+ *
+ * The original 1.21.x version drew custom PNG icons (textures/gui/speaking.png,
+ * textures/gui/muted.png) but those texture files were never actually shipped
+ * in resources/, so nothing rendered but the "missing texture" placeholder.
+ * This version draws simple colored squares instead so it always renders
+ * something, with no missing assets required.
  */
 public class VoiceHudRenderer {
 
-    private static final Identifier SPEAKING_ICON =
-            Identifier.of("proximichat", "textures/gui/speaking.png");
-    private static final Identifier MUTED_ICON =
-            Identifier.of("proximichat", "textures/gui/muted.png");
+    private static final int MUTED_COLOR    = 0xFFFF5555; // red
+    private static final int SPEAKING_COLOR = 0xFF55FF55; // green
 
     /** UUID → timestamp of last voice packet (for fade-out) */
     private static final Map<UUID, Long> speakingTimestamps = new ConcurrentHashMap<>();
@@ -39,26 +40,23 @@ public class VoiceHudRenderer {
         }
     }
 
-    // ── HUD render ────────────────────────────────────────────────────────────
+    // ── HUD render (called from HudElementRegistry, see ProximiChatClient) ─────
 
-    public static void render(DrawContext context) {
+    public static void render(GuiGraphicsExtractor graphics) {
         if (!ProximiChatConfig.get().showPlayerIcons) return;
 
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || mc.world == null) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
 
         long now = System.currentTimeMillis();
-        int screenW = mc.getWindow().getScaledWidth();
-        int screenH = mc.getWindow().getScaledHeight();
+        int screenH = mc.getWindow().getGuiScaledHeight();
 
         // Mute indicator for local player (bottom left)
         if (VoiceClientHandler.isMuted()) {
-            context.drawTexture(MUTED_ICON, 4, screenH - 20, 0, 0, 16, 16, 16, 16);
-        }
-
-        // Speaking indicator for self (bottom left, green mic)
-        if (!VoiceClientHandler.isMuted() && ProximiChatClient.pushToTalkKey.isPressed()) {
-            context.drawTexture(SPEAKING_ICON, 4, screenH - 20, 0, 0, 16, 16, 16, 16);
+            graphics.fill(4, screenH - 20, 12, screenH - 12, MUTED_COLOR);
+        } else if (ProximiChatClient.pushToTalkKey.isDown()) {
+            // Speaking indicator for self (bottom left, green square)
+            graphics.fill(4, screenH - 20, 12, screenH - 12, SPEAKING_COLOR);
         }
 
         // Clean up stale entries

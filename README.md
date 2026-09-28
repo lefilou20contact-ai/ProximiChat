@@ -1,6 +1,6 @@
 # ProximiChat — Fabric Voice Chat Mod
 
-A proximity voice chat mod for Minecraft 1.20–1.21.x (Fabric).  
+A proximity voice chat mod for Minecraft 26.2 (Fabric, Java 25).  
 Inspired by Simple Voice Chat. Fully open-source.
 
 ---

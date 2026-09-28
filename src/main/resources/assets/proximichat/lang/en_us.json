@@ -4,5 +4,6 @@
   "key.proximichat.settings": "Voice Chat Settings",
   "category.proximichat": "ProximiChat",
   "screen.proximichat.settings": "Voice Chat Settings",
-  "screen.proximichat.groups": "Voice Groups"
+  "screen.proximichat.groups": "Voice Groups",
+  "key.category.proximichat.voice": "ProximiChat"
 }

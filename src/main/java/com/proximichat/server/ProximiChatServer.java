@@ -8,11 +8,11 @@ public class ProximiChatServer implements DedicatedServerModInitializer {
 
     @Override
     public void onInitializeServer() {
-        // Register S2C packet types
+        // Register S2C packet types so the dedicated server is able to send them
         PacketRegistry.registerClientbound();
 
         // Clean up when a player disconnects
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
-                VoiceServerHandler.playerDisconnected(handler.player.getUuid()));
+                VoiceServerHandler.playerDisconnected(handler.player.getUUID()));
     }
 }

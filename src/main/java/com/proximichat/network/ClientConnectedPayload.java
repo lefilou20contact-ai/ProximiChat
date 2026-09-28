@@ -1,21 +1,23 @@
 package com.proximichat.network;
 
 import com.proximichat.ProximiChat;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
-public record ClientConnectedPayload(int clientVersion) implements CustomPayload {
+public record ClientConnectedPayload(int clientVersion) implements CustomPacketPayload {
 
-    public static final CustomPayload.Id<ClientConnectedPayload> ID =
-            new CustomPayload.Id<>(Identifier.of(ProximiChat.MOD_ID, "client_connected"));
+    public static final CustomPacketPayload.Type<ClientConnectedPayload> TYPE =
+            new CustomPacketPayload.Type<>(Identifier.of(ProximiChat.MOD_ID, "client_connected"));
 
-    public static final PacketCodec<PacketByteBuf, ClientConnectedPayload> CODEC =
-            PacketCodec.of(
-                    (p, buf) -> buf.writeVarInt(p.clientVersion()),
-                    buf -> new ClientConnectedPayload(buf.readVarInt())
-            );
+    public static final StreamCodec<RegistryFriendlyByteBuf, ClientConnectedPayload> CODEC = StreamCodec.of(
+            (buf, payload) -> buf.writeVarInt(payload.clientVersion()),
+            buf -> new ClientConnectedPayload(buf.readVarInt())
+    );
 
-    @Override public CustomPayload.Id<? extends CustomPayload> getId() { return ID; }
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
 }

@@ -7,7 +7,6 @@
   "authors": ["You"],
   "contact": {},
   "license": "MIT",
-  "icon": "assets/proximichat/textures/gui/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": ["com.proximichat.ProximiChat"],
@@ -19,9 +18,9 @@
     { "config": "proximichat.client.mixins.json", "environment": "client" }
   ],
   "depends": {
-    "fabricloader": ">=0.14.0",
+    "fabricloader": ">=0.19.3",
     "fabric-api": "*",
-    "minecraft": ">=1.20 <=1.21.99",
-    "java": ">=21"
+    "minecraft": ">=26.2-",
+    "java": ">=25"
   }
 }

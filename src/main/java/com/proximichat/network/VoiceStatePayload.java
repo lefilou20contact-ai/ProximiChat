@@ -1,23 +1,28 @@
 package com.proximichat.network;
 
 import com.proximichat.ProximiChat;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
 import java.util.UUID;
 
-public record VoiceStatePayload(UUID player, boolean speaking) implements CustomPayload {
+public record VoiceStatePayload(UUID player, boolean speaking) implements CustomPacketPayload {
 
-    public static final CustomPayload.Id<VoiceStatePayload> ID =
-            new CustomPayload.Id<>(Identifier.of(ProximiChat.MOD_ID, "voice_state"));
+    public static final CustomPacketPayload.Type<VoiceStatePayload> TYPE =
+            new CustomPacketPayload.Type<>(Identifier.of(ProximiChat.MOD_ID, "voice_state"));
 
-    public static final PacketCodec<PacketByteBuf, VoiceStatePayload> CODEC =
-            PacketCodec.of(
-                    (p, buf) -> { buf.writeUuid(p.player()); buf.writeBoolean(p.speaking()); },
-                    buf -> new VoiceStatePayload(buf.readUuid(), buf.readBoolean())
-            );
+    public static final StreamCodec<RegistryFriendlyByteBuf, VoiceStatePayload> CODEC = StreamCodec.of(
+            (buf, payload) -> {
+                buf.writeUUID(payload.player());
+                buf.writeBoolean(payload.speaking());
+            },
+            buf -> new VoiceStatePayload(buf.readUUID(), buf.readBoolean())
+    );
 
-    @Override public CustomPayload.Id<? extends CustomPayload> getId() { return ID; }
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
 }
