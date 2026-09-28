@@ -20,12 +20,13 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
+        with:
+          gradle-version: 9.4.0
 
       - name: Build
-        run: ./gradlew build --stacktrace
+        # Uses the Gradle 9.4 installed above (not the wrapper), so the build
+        # works even if gradle-wrapper.properties is still on an old version.
+        run: gradle build --stacktrace
 
       - name: Upload mod jar
         uses: actions/upload-artifact@v4
