@@ -12,221 +12,183 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Handles microphone capture → Opus encode → send,
- * and receive → Opus decode → spatial playback.
- *
- * Mic capture happens on a dedicated background thread (started on join,
- * stopped on disconnect) rather than on the client render thread, since
- * TargetDataLine#read() blocks and would otherwise stall the game loop.
- *
- * NOTE: This implementation uses javax.sound for simplicity/portability.
- * For production, replace the encode/decode stubs with actual JNI Opus bindings
- * (e.g. concentus or opus-java).
- */
-public class VoiceClientHandler {
-
+public final class VoiceClientHandler {
     private static TargetDataLine microphone;
     private static Thread captureThread;
-    private static volatile boolean muted = false;
-    private static volatile boolean connected = false;
-
-    /** Updated every client tick from the main thread; read by the capture thread. */
+    private static volatile boolean muted;
+    private static volatile boolean connected;
     private static final AtomicBoolean pushToTalkHeld = new AtomicBoolean(false);
-
-    /** Per-speaker audio output lines */
+    private static final AtomicReference<UUID> localPlayerUuid = new AtomicReference<>();
     private static final Map<UUID, SourceDataLine> speakers = new ConcurrentHashMap<>();
+    private static final AudioFormat FORMAT = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, 48000f, 16, 1, 2, 48000f, false);
 
-    private static final AudioFormat FORMAT = new AudioFormat(
-            AudioFormat.Encoding.PCM_SIGNED,
-            48000f, 16, 1, 2, 48000f, false
-    );
+    private VoiceClientHandler() { }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
-
-    public static void onJoin() {
+    public static synchronized void onJoin() {
+        stopAudio();
+        Minecraft client = Minecraft.getInstance();
+        localPlayerUuid.set(client.player == null ? null : client.player.getUUID());
+        ClientPlayNetworking.send(new ClientConnectedPayload(2));
         try {
             DataLine.Info info = new DataLine.Info(TargetDataLine.class, FORMAT);
             if (!AudioSystem.isLineSupported(info)) {
-                ProximiChat.LOGGER.warn("[ProximiChat] Microphone not supported.");
+                ProximiChat.LOGGER.warn("[ProximiChat] Microphone format is unsupported.");
                 return;
             }
             microphone = (TargetDataLine) AudioSystem.getLine(info);
             microphone.open(FORMAT);
             microphone.start();
             connected = true;
-
-            // Announce to server
-            ClientPlayNetworking.send(new ClientConnectedPayload(1));
-            ProximiChat.LOGGER.info("[ProximiChat] Microphone opened.");
-
             captureThread = new Thread(VoiceClientHandler::captureLoop, "ProximiChat Mic Capture");
             captureThread.setDaemon(true);
             captureThread.start();
-        } catch (LineUnavailableException e) {
-            ProximiChat.LOGGER.error("[ProximiChat] Cannot open microphone", e);
+        } catch (LineUnavailableException | IllegalArgumentException e) {
+            ProximiChat.LOGGER.warn("[ProximiChat] Cannot open microphone", e);
+            stopAudio();
         }
     }
 
-    public static void onDisconnect() {
-        connected = false;
+    public static synchronized void onDisconnect() {
+        stopAudio();
+        localPlayerUuid.set(null);
+        OpusCodec.reset();
+    }
 
-        if (captureThread != null) {
-            captureThread.interrupt();
-            captureThread = null;
-        }
-        if (microphone != null && microphone.isOpen()) {
-            microphone.stop();
-            microphone.close(); // unblocks any in-progress read()
+    private static void stopAudio() {
+        connected = false;
+        pushToTalkHeld.set(false);
+        Thread thread = captureThread;
+        captureThread = null;
+        if (thread != null) thread.interrupt();
+        TargetDataLine mic = microphone;
+        microphone = null;
+        if (mic != null && mic.isOpen()) {
+            mic.stop();
+            mic.close();
         }
         speakers.values().forEach(line -> {
-            if (line.isOpen()) { line.stop(); line.close(); }
+            if (line != null && line.isOpen()) { line.stop(); line.close(); }
         });
         speakers.clear();
     }
 
-    // ── Tick (main thread) — just samples key state, does no blocking I/O ──────
-
     public static void tick(Minecraft client) {
-        if (!connected || muted) {
+        localPlayerUuid.set(client.player == null ? null : client.player.getUUID());
+        if (!connected || muted || ProximiChatClient.pushToTalkKey == null) {
             pushToTalkHeld.set(false);
             return;
         }
         pushToTalkHeld.set(ProximiChatClient.pushToTalkKey.isDown());
     }
 
-    // ── Capture loop (background thread) ───────────────────────────────────────
+    private static int frameSamples() {
+        return switch (ProximiChatConfig.get().frameSize) {
+            case 120, 240, 480, 960, 1920, 2880 -> ProximiChatConfig.get().frameSize;
+            default -> 960;
+        };
+    }
 
     private static void captureLoop() {
         while (connected && !Thread.currentThread().isInterrupted()) {
-            UUID playerUuid = currentPlayerUuid();
-            if (playerUuid == null) {
-                sleepQuiet(20);
-                continue;
-            }
-
-            int frameBytes = ProximiChatConfig.get().frameSize * FORMAT.getFrameSize();
-            byte[] pcm = new byte[frameBytes];
-            int read;
-            try {
-                read = microphone.read(pcm, 0, frameBytes); // blocks, but off the render thread
-            } catch (Exception e) {
-                break; // line was closed on disconnect
-            }
-            if (read <= 0) continue;
+            int bytes = frameSamples() * FORMAT.getFrameSize();
+            byte[] pcm = new byte[bytes];
+            TargetDataLine mic = microphone;
+            if (mic == null || !readFully(mic, pcm)) break;
             if (muted) continue;
-
-            boolean shouldTransmit = ProximiChatConfig.get().pushToTalk
-                    ? pushToTalkHeld.get()
-                    : hasAudioActivity(pcm, read);
-            if (!shouldTransmit) continue;
-
-            applyInputGain(pcm, read);
-            byte[] encoded = OpusCodec.encode(pcm, read);
-            if (encoded == null) continue;
-
-            boolean whisper = false; // TODO: add whisper key binding
-            ClientPlayNetworking.send(new VoiceDataPayload(playerUuid, encoded, whisper));
+            ProximiChatConfig cfg = ProximiChatConfig.get();
+            if (cfg.pushToTalk ? !pushToTalkHeld.get() : !hasAudioActivity(pcm)) continue;
+            applyInputGain(pcm, cfg.inputGain);
+            byte[] encoded = OpusCodec.encode(pcm, pcm.length);
+            UUID sender = localPlayerUuid.get();
+            if (encoded == null || sender == null) continue;
+            Minecraft.getInstance().execute(() -> {
+                if (connected && ClientPlayNetworking.canSend(VoiceDataPayload.TYPE)) {
+                    ClientPlayNetworking.send(new VoiceDataPayload(sender, encoded, false));
+                }
+            });
         }
     }
 
-    private static void applyInputGain(byte[] pcm, int len) {
-        float gain = ProximiChatConfig.get().inputGain;
-        if (gain == 1.0f) return;
-        for (int i = 0; i < len - 1; i += 2) {
+    private static boolean readFully(TargetDataLine line, byte[] bytes) {
+        int offset = 0;
+        while (offset < bytes.length && connected && !Thread.currentThread().isInterrupted()) {
+            try {
+                int count = line.read(bytes, offset, bytes.length - offset);
+                if (count <= 0) return false;
+                offset += count;
+            } catch (RuntimeException e) { return false; }
+        }
+        return offset == bytes.length;
+    }
+
+    private static void applyInputGain(byte[] pcm, float gain) {
+        if (!Float.isFinite(gain) || gain == 1.0f) return;
+        for (int i = 0; i < pcm.length - 1; i += 2) {
             int sample = (short) ((pcm[i + 1] << 8) | (pcm[i] & 0xFF));
             sample = Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, Math.round(sample * gain)));
-            pcm[i] = (byte) (sample & 0xFF);
-            pcm[i + 1] = (byte) ((sample >> 8) & 0xFF);
+            pcm[i] = (byte) sample;
+            pcm[i + 1] = (byte) (sample >> 8);
         }
     }
 
-    private static UUID currentPlayerUuid() {
-        Minecraft client = Minecraft.getInstance();
-        return client.player != null ? client.player.getUUID() : null;
-    }
-
-    private static void sleepQuiet(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+    private static boolean hasAudioActivity(byte[] pcm) {
+        long squares = 0;
+        int count = pcm.length / 2;
+        for (int i = 0; i < pcm.length - 1; i += 2) {
+            short sample = (short) ((pcm[i + 1] << 8) | (pcm[i] & 0xFF));
+            squares += (long) sample * sample;
         }
+        return count > 0 && Math.sqrt((double) squares / count) > 500;
     }
 
-    private static boolean hasAudioActivity(byte[] buf, int read) {
-        long rms = 0;
-        for (int i = 0; i < read - 1; i += 2) {
-            short sample = (short) ((buf[i + 1] << 8) | (buf[i] & 0xFF));
-            rms += (long) sample * sample;
-        }
-        rms = (long) Math.sqrt((double) rms / (read / 2));
-        return rms > 500; // simple threshold, make configurable
-    }
-
-    // ── Receive audio from server ─────────────────────────────────────────────
-
-    public static void onVoiceData(VoiceDataPayload payload,
-                                   ClientPlayNetworking.Context ctx) {
-        byte[] pcm = OpusCodec.decode(payload.opusData());
+    public static void onVoiceData(VoiceDataPayload payload, ClientPlayNetworking.Context ctx) {
+        byte[] pcm = OpusCodec.decode(payload.senderUuid(), payload.opusData());
         if (pcm == null) return;
-
         UUID speaker = payload.senderUuid();
-        SourceDataLine line = speakers.computeIfAbsent(speaker, k -> openSpeakerLine());
+        SourceDataLine line = speakers.computeIfAbsent(speaker, key -> openSpeakerLine());
         if (line == null || !line.isOpen()) return;
-
-        // Apply volume based on distance (proximity attenuation)
         float volume = computeVolume(speaker, ctx.client(), payload.whisper());
-        byte[] attenuated = applyVolume(pcm, volume);
-
-        line.write(attenuated, 0, attenuated.length);
+        byte[] audio = applyVolume(pcm, volume, ProximiChatConfig.get().outputGain);
+        line.write(audio, 0, audio.length);
     }
 
     private static float computeVolume(UUID speakerUuid, Minecraft client, boolean whisper) {
-        if (client.player == null || client.level == null) return 0f;
-        var speaker = client.level.players().stream()
-                .filter(p -> p.getUUID().equals(speakerUuid))
-                .findFirst().orElse(null);
-        if (speaker == null) return 1f; // same group — full volume
-
-        double dist = client.player.position().distanceTo(speaker.position());
-        double max = whisper ? ProximiChatConfig.get().whisperDistance
-                             : ProximiChatConfig.get().proximityDistance;
-        return (float) Math.max(0, 1.0 - (dist / max));
+        if (client.player == null || client.level == null) return 0;
+        var speaker = client.level.players().stream().filter(p -> p.getUUID().equals(speakerUuid)).findFirst().orElse(null);
+        if (speaker == null) return 1;
+        double distance = client.player.position().distanceTo(speaker.position());
+        double range = whisper ? ProximiChatConfig.get().whisperDistance : ProximiChatConfig.get().proximityDistance;
+        if (!Double.isFinite(range) || range <= 0) return 0;
+        return (float) Math.max(0, 1 - distance / range);
     }
 
-    private static byte[] applyVolume(byte[] pcm, float volume) {
+    private static byte[] applyVolume(byte[] pcm, float volume, float outputGain) {
         byte[] out = new byte[pcm.length];
+        float gain = Float.isFinite(outputGain) ? Math.max(0, Math.min(4, volume * outputGain)) : volume;
         for (int i = 0; i < pcm.length - 1; i += 2) {
             short sample = (short) ((pcm[i + 1] << 8) | (pcm[i] & 0xFF));
-            sample = (short) (sample * volume * ProximiChatConfig.get().outputGain);
-            out[i]     = (byte) (sample & 0xFF);
-            out[i + 1] = (byte) ((sample >> 8) & 0xFF);
+            int scaled = Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, Math.round(sample * gain)));
+            out[i] = (byte) scaled;
+            out[i + 1] = (byte) (scaled >> 8);
         }
         return out;
     }
 
     private static SourceDataLine openSpeakerLine() {
         try {
-            DataLine.Info info = new DataLine.Info(SourceDataLine.class, FORMAT);
-            SourceDataLine line = (SourceDataLine) AudioSystem.getLine(info);
+            SourceDataLine line = (SourceDataLine) AudioSystem.getLine(new DataLine.Info(SourceDataLine.class, FORMAT));
             line.open(FORMAT);
             line.start();
             return line;
-        } catch (LineUnavailableException e) {
+        } catch (LineUnavailableException | IllegalArgumentException e) {
             ProximiChat.LOGGER.error("[ProximiChat] Cannot open speaker line", e);
             return null;
         }
     }
 
-    // ── Misc ──────────────────────────────────────────────────────────────────
-
-    public static void toggleMute() {
-        muted = !muted;
-        ProximiChat.LOGGER.info("[ProximiChat] Muted: {}", muted);
-    }
-
+    public static void toggleMute() { muted = !muted; }
     public static boolean isMuted() { return muted; }
     public static boolean isConnected() { return connected; }
 }
