@@ -6,86 +6,54 @@ import com.proximichat.network.MutePlayerPayload;
 import com.proximichat.network.VoiceDataPayload;
 import com.proximichat.network.VoiceStatePayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Central server-side voice routing.
- * When a player sends voice data, this class finds all players within
- * proximityDistance and forwards the Opus frame to each of them.
- */
-public class VoiceServerHandler {
-
-    /** Players that have confirmed they have the mod installed. */
-    private static final Set<UUID> connectedClients =
-            Collections.newSetFromMap(new ConcurrentHashMap<>());
-
-    /** Per-player mute lists: muterUUID → set of muted UUIDs.
-     *  These are server-side admin mutes; client-side mutes are handled locally. */
+public final class VoiceServerHandler {
+    private static final Set<UUID> connectedClients = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static final Map<UUID, Set<UUID>> muteLists = new ConcurrentHashMap<>();
+    private VoiceServerHandler() { }
 
-    // ── Packet handlers ───────────────────────────────────────────────────────
-
-    public static void onClientConnected(ClientConnectedPayload payload,
-                                         ServerPlayNetworking.Context ctx) {
-        UUID uuid = ctx.player().getUUID();
-        connectedClients.add(uuid);
+    public static void onClientConnected(ClientConnectedPayload payload, ServerPlayNetworking.Context ctx) {
+        connectedClients.add(ctx.player().getUUID());
+        VoiceGroupManager.syncGroupList(ctx.server());
     }
 
-    public static void onVoiceData(VoiceDataPayload payload,
-                                   ServerPlayNetworking.Context ctx) {
+    public static void onVoiceData(VoiceDataPayload payload, ServerPlayNetworking.Context ctx) {
         ServerPlayer sender = ctx.player();
         UUID senderUuid = sender.getUUID();
+        byte[] audio = payload.opusData();
+        if (!connectedClients.contains(senderUuid) || audio.length == 0
+                || audio.length > VoiceDataPayload.MAX_FRAME_BYTES) return;
 
-        if (!connectedClients.contains(senderUuid)) return;
-
-        double maxDist = payload.whisper()
-                ? ProximiChatConfig.get().whisperDistance
-                : ProximiChatConfig.get().proximityDistance;
-
+        ProximiChatConfig cfg = ProximiChatConfig.get();
+        double maxDist = payload.whisper() ? cfg.whisperDistance : cfg.proximityDistance;
+        if (!Double.isFinite(maxDist) || maxDist <= 0) return;
         Vec3 senderPos = sender.position();
-
-        // Broadcast to nearby players on the same dimension
-        VoiceDataPayload outPayload = new VoiceDataPayload(senderUuid, payload.opusData(), payload.whisper());
+        Optional<String> senderGroup = VoiceGroupManager.getGroupOf(senderUuid);
+        VoiceDataPayload forwarded = new VoiceDataPayload(senderUuid, audio, payload.whisper());
 
         sender.level().players().forEach(target -> {
-            if (target.getUUID().equals(senderUuid)) return; // don't echo to self
-            if (!connectedClients.contains(target.getUUID())) return;
-            if (isMuted(senderUuid, target.getUUID())) return;
-
-            // Check if target is in the same private group — if so, skip proximity check
-            Optional<String> senderGroup = VoiceGroupManager.getGroupOf(senderUuid);
-            Optional<String> targetGroup = VoiceGroupManager.getGroupOf(target.getUUID());
-            boolean inSameGroup = senderGroup.isPresent() && senderGroup.equals(targetGroup);
-
-            if (!inSameGroup) {
-                double dist = target.position().distanceTo(senderPos);
-                if (dist > maxDist) return;
-            }
-
-            ServerPlayNetworking.send(target, outPayload);
+            UUID targetId = target.getUUID();
+            if (targetId.equals(senderUuid) || !connectedClients.contains(targetId) || isMuted(senderUuid, targetId)) return;
+            Optional<String> targetGroup = VoiceGroupManager.getGroupOf(targetId);
+            boolean sameGroup = senderGroup.isPresent() && senderGroup.equals(targetGroup);
+            if (!sameGroup && target.position().distanceTo(senderPos) > maxDist) return;
+            ServerPlayNetworking.send(target, forwarded);
         });
-
-        // Broadcast speaking state to all connected clients for overlay icons
         broadcastVoiceState(sender, true);
     }
 
-    public static void onMutePlayer(MutePlayerPayload payload,
-                                    ServerPlayNetworking.Context ctx) {
-        UUID muter = ctx.player().getUUID();
-        Set<UUID> muted = muteLists.computeIfAbsent(muter,
-                k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
-        if (payload.muted()) {
-            muted.add(payload.target());
-        } else {
-            muted.remove(payload.target());
-        }
+    public static void onMutePlayer(MutePlayerPayload payload, ServerPlayNetworking.Context ctx) {
+        UUID listener = ctx.player().getUUID();
+        Set<UUID> muted = muteLists.computeIfAbsent(listener, k -> ConcurrentHashMap.newKeySet());
+        if (payload.muted()) muted.add(payload.target());
+        else muted.remove(payload.target());
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static boolean isMuted(UUID speaker, UUID listener) {
         Set<UUID> muted = muteLists.get(listener);
@@ -94,19 +62,17 @@ public class VoiceServerHandler {
 
     private static void broadcastVoiceState(ServerPlayer speaker, boolean speaking) {
         VoiceStatePayload state = new VoiceStatePayload(speaker.getUUID(), speaking);
-        speaker.level().players().forEach(p -> {
-            if (connectedClients.contains(p.getUUID())) {
-                ServerPlayNetworking.send(p, state);
-            }
+        speaker.level().players().forEach(player -> {
+            if (connectedClients.contains(player.getUUID())) ServerPlayNetworking.send(player, state);
         });
     }
 
-    public static void playerDisconnected(UUID uuid) {
-        connectedClients.remove(uuid);
-        muteLists.remove(uuid);
+    public static void playerDisconnected(UUID player, MinecraftServer server) {
+        connectedClients.remove(player);
+        muteLists.remove(player);
+        muteLists.values().forEach(muted -> muted.remove(player));
+        VoiceGroupManager.playerDisconnected(player, server);
     }
 
-    public static boolean isConnected(UUID uuid) {
-        return connectedClients.contains(uuid);
-    }
+    public static boolean isConnected(UUID uuid) { return connectedClients.contains(uuid); }
 }
